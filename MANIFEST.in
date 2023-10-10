@@ -1,0 +1,2 @@
+include src/package_name/assets/*.txt
+include ./README.md
