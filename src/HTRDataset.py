@@ -5,11 +5,15 @@ import jiwer
 
 
 class HTRDataset(Dataset):
-    def __init__(self, root_dir, df, processor, max_target_length=184):
+    def __init__(self, root_dir, df, processor, max_target_length=256):
         self.root_dir = root_dir
         self.df = df
         self.processor = processor
         self.max_target_length = max_target_length
+        self.df = self.df[self.df['text'].str.strip() != '']
+        self.df = self.df[self.df['text'].apply(lambda x: len(self.processor.tokenizer(x)['input_ids']) <= max_target_length)]
+        self.df = self.df.reset_index(drop=True)
+        
 
     def __len__(self):
         return len(self.df)

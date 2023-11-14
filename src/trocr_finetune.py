@@ -43,6 +43,8 @@ def create_datasets(basepaths: list, gt_paths: list, train_eval_split: float, pr
         datasets_train.append(train_dataset)
         datasets_test.append(eval_dataset)
 
+    len_of_datasets = sum(len(sublist) for sublist in datasets_train)
+
     train_concat_dataset = ConcatDataset(datasets_train)
     test_concat_dataset = ConcatDataset(datasets_test)
 
@@ -61,17 +63,19 @@ def compute_metrics(pred):
 
     return {"cer": cer}
 
-
 if __name__ == "__main__":
-    basepaths = ["/leonardo_work/EUHPC_D02_014/data/text_recognition/Trolldomskommissionen3/"]
+    
+    basepaths = ["/leonardo_work/EUHPC_D02_014/data/text_recognition/HTR_1700/", "/leonardo_work/EUHPC_D02_014/data/text_recognition/police_records/", "/leonardo_work/EUHPC_D02_014/data/text_recognition/court_records/"]
     gt_paths = [os.path.join(basepath, "gt_files", "text_recognition_all_bin.jsonl") for basepath in basepaths]
+
+    cer_metric = evaluate.load("cer")
 
     processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
 
     train_concat_dataset, test_concat_dataset = create_datasets(
         basepaths=basepaths, gt_paths=gt_paths, train_eval_split=0.05, processor=processor
     )
-
+    
     print("Number of training examples:", len(train_concat_dataset))
     print("Number of validation examples:", len(test_concat_dataset))
 
@@ -94,35 +98,33 @@ if __name__ == "__main__":
     training_args = Seq2SeqTrainingArguments(
         predict_with_generate=True,
         evaluation_strategy="epoch",
-        num_train_epochs=5,  # change (epoch)
+        num_train_epochs=3,  # change (epoch)
         per_device_train_batch_size=32,
-        per_device_eval_batch_size=16,  # maybe this one
+        per_device_eval_batch_size=32,  # maybe this one
         fp16=False,
         bf16=True,
         greater_is_better=False,
         dataloader_drop_last=True,
-        load_best_model_at_end=True,
-        output_dir="/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_test",
+        load_best_model_at_end=False,
+        output_dir="/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_version_1",
         save_total_limit=3,
-        logging_dir="/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_test/tensorboard",
+        logging_dir="/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_version_1/tensorboard",
         logging_steps=10,
         report_to="tensorboard",
-        save_strategy="epoch",
+        save_strategy="epoch"
     )
 
     train_dataloader = DataLoader(
         train_concat_dataset,
         batch_size=training_args.per_device_train_batch_size,
-        sampler=CustomRandomSampler(train_concat_dataset),
+        sampler=CustomRandomSampler(train_concat_dataset)
     )
 
     val_dataloader = DataLoader(
         test_concat_dataset,
         batch_size=training_args.per_device_train_batch_size,
-        sampler=CustomRandomSampler(test_concat_dataset),
+        sampler=CustomRandomSampler(test_concat_dataset)
     )
-
-    cer_metric = evaluate.load("cer")
 
     trainer = Seq2SeqTrainer(
         model=model,
@@ -133,4 +135,4 @@ if __name__ == "__main__":
         eval_dataset=test_concat_dataset,
         data_collator=default_data_collator,
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint='/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_version_1/checkpoint-9378')
