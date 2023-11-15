@@ -11,6 +11,8 @@ from torch.utils.data import RandomSampler
 from torch.utils.data import DataLoader
 from transformers import VisionEncoderDecoderModel
 from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
+from transformers import ViTFeatureExtractor
+from transformers import AutoTokenizer
 import evaluate
 from transformers import default_data_collator
 import os
@@ -64,6 +66,12 @@ def compute_metrics(pred):
 
     return {"cer": cer}
 
+def load_processor() -> TrOCRProcessor:
+    feature_extractor=ViTFeatureExtractor.from_pretrained("google/vit-base-patch16-224", cache_dir='/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/hub')
+    model_path = "Riksarkivet/bert-base-cased-swe-historical"
+    tokenizer = AutoTokenizer.from_pretrained(model_path, cache_dir='/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/hub')
+    return TrOCRProcessor(feature_extractor=feature_extractor, tokenizer=tokenizer)
+
 if __name__ == "__main__":
     
     basepaths = ["/leonardo_work/EUHPC_D02_014/data/text_recognition/HTR_1700/", "/leonardo_work/EUHPC_D02_014/data/text_recognition/police_records/", "/leonardo_work/EUHPC_D02_014/data/text_recognition/court_records/"]
@@ -71,7 +79,12 @@ if __name__ == "__main__":
 
     cer_metric = evaluate.load("cer")
 
-    processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
+    processor = load_processor()
+    #processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten") #finetuning
+
+    model = VisionEncoderDecoderModel.from_encoder_decoder_pretrained("google/vit-base-patch16-224", 
+                                                                "Riksarkivet/bert-base-cased-swe-historical", 
+                                                                cache_dir='/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/hub')
 
     train_concat_dataset, test_concat_dataset = Utils.create_datasets(
         basepaths=basepaths, gt_paths=gt_paths, train_eval_split=0.05, processor=processor
@@ -80,10 +93,15 @@ if __name__ == "__main__":
     print("Number of training examples:", len(train_concat_dataset))
     print("Number of validation examples:", len(test_concat_dataset))
 
-    """
 
-    model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-stage1")
+    #model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-stage1") #fintuning
 
+    
+
+
+    # ensure that randomly initialized cross-attention layers are added
+    assert model.config.decoder.is_decoder is True
+    assert model.config.decoder.add_cross_attention is True
     # set special tokens used for creating the decoder_input_ids from the labels
     model.config.decoder_start_token_id = processor.tokenizer.cls_token_id
     model.config.pad_token_id = processor.tokenizer.pad_token_id
@@ -92,7 +110,7 @@ if __name__ == "__main__":
 
     # set beam search parameters
     model.config.eos_token_id = processor.tokenizer.sep_token_id
-    model.config.max_length = 184
+    model.config.max_length = 128
     model.config.early_stopping = True
     model.config.no_repeat_ngram_size = 3
     model.config.length_penalty = 2.0
@@ -101,7 +119,7 @@ if __name__ == "__main__":
     training_args = Seq2SeqTrainingArguments(
         predict_with_generate=True,
         evaluation_strategy="epoch",
-        num_train_epochs=3,  # change (epoch)
+        num_train_epochs=5,  # change (epoch)
         per_device_train_batch_size=32,
         per_device_eval_batch_size=32,  # maybe this one
         fp16=False,
@@ -109,12 +127,13 @@ if __name__ == "__main__":
         greater_is_better=False,
         dataloader_drop_last=True,
         load_best_model_at_end=False,
-        output_dir="/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_version_1",
+        output_dir="/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_from_scratch_version_1",
         save_total_limit=3,
-        logging_dir="/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_version_1/tensorboard",
+        logging_dir="/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_from_scratch_version_1/tensorboard",
         logging_steps=10,
         report_to="tensorboard",
-        save_strategy="epoch"
+        save_strategy="epoch",
+        learning_rate=5e-5
     )
 
     train_dataloader = DataLoader(
@@ -138,6 +157,7 @@ if __name__ == "__main__":
         eval_dataset=test_concat_dataset,
         data_collator=default_data_collator,
     )
+    
+    trainer.train()
     #trainer.train(resume_from_checkpoint='/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_version_1/checkpoint-9378')
 
-    """
