@@ -1,4 +1,4 @@
-from HTRDataset import HTRDataset
+from utils.HTRDataset import HTRDataset
 import pandas as pd
 from sklearn.model_selection import train_test_split
 import torch
@@ -14,6 +14,7 @@ from transformers import Seq2SeqTrainer, Seq2SeqTrainingArguments
 import evaluate
 from transformers import default_data_collator
 import os
+from utils.utils import Utils
 
 
 class CustomRandomSampler(RandomSampler):
@@ -23,7 +24,7 @@ class CustomRandomSampler(RandomSampler):
     def __iter__(self):
         return iter(torch.randperm(len(self.data_source)).tolist())
 
-
+"""
 def create_datasets(basepaths: list, gt_paths: list, train_eval_split: float, processor):
     datasets_train = list()
     datasets_test = list()
@@ -49,7 +50,7 @@ def create_datasets(basepaths: list, gt_paths: list, train_eval_split: float, pr
     test_concat_dataset = ConcatDataset(datasets_test)
 
     return train_concat_dataset, test_concat_dataset
-
+"""
 
 def compute_metrics(pred):
     labels_ids = pred.label_ids
@@ -72,12 +73,14 @@ if __name__ == "__main__":
 
     processor = TrOCRProcessor.from_pretrained("microsoft/trocr-base-handwritten")
 
-    train_concat_dataset, test_concat_dataset = create_datasets(
+    train_concat_dataset, test_concat_dataset = Utils.create_datasets(
         basepaths=basepaths, gt_paths=gt_paths, train_eval_split=0.05, processor=processor
     )
     
     print("Number of training examples:", len(train_concat_dataset))
     print("Number of validation examples:", len(test_concat_dataset))
+
+    """
 
     model = VisionEncoderDecoderModel.from_pretrained("microsoft/trocr-base-stage1")
 
@@ -135,4 +138,6 @@ if __name__ == "__main__":
         eval_dataset=test_concat_dataset,
         data_collator=default_data_collator,
     )
-    trainer.train(resume_from_checkpoint='/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_version_1/checkpoint-9378')
+    #trainer.train(resume_from_checkpoint='/leonardo/home/userexternal/elenas00/projects/huggingface_htr/models/trocr_version_1/checkpoint-9378')
+
+    """
